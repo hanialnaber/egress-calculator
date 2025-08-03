@@ -13,9 +13,18 @@ from typing import Dict, List, Tuple, Optional
 import math
 
 # Version info
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 __build_date__ = "2025-08-03"
 __changelog__ = {
+    "2.3.0": [
+        "🇺🇸 MAJOR: Multi-State Expansion - Added CA, FL, NY, IL with comprehensive jurisdiction support",
+        "Dynamic state/jurisdiction selection with auto-updating dropdowns",
+        "Added 17+ major cities across 4 new states with local authority information",
+        "State-specific amendments and building code requirements",
+        "Enhanced IBC version selection: Use jurisdiction default or choose manually",
+        "Comprehensive validation and error handling across all states",
+        "Updated to 'Multi-State Edition' for nationwide architectural support"
+    ],
     "2.2.0": [
         "Texas-focused jurisdiction system with granular city/county support",
         "Auto-populates IBC code version based on local jurisdiction",
