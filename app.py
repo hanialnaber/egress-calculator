@@ -489,8 +489,10 @@ def main():
                         'version': __version__,
                         'app_version': __version__,
                         'exported_by': f"Egress Calculator v{__version__}"
-                    }            project_json = json.dumps(project_data, indent=2)
-            st.download_button(
+                    }
+                    
+                    project_json = json.dumps(project_data, indent=2)
+                    st.download_button(
                 label="📥 Export Project",
                 data=project_json,
                 file_name=f"egress_project_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
