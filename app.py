@@ -13,6 +13,27 @@ import io
 from typing import Dict, List, Tuple, Optional
 import math
 
+# Version info
+__version__ = "2.1.0"
+__build_date__ = "2025-08-03"
+__changelog__ = {
+    "2.1.0": [
+        "Added step-by-step calculation logic with educational transparency",
+        "Enhanced calculation explanations with IBC code references",
+        "Added design recommendations based on calculated values",
+        "Fixed NoneType error in travel distance comparison",
+        "Improved calculation summary for export"
+    ],
+    "2.0.0": [
+        "Complete rewrite in Python/Streamlit",
+        "Multi-building project support",
+        "Unit conversion (Imperial/Metric)",
+        "Project save/load functionality",
+        "Calculation history tracking",
+        "Professional UI with code references"
+    ]
+}
+
 # Configure Streamlit page
 st.set_page_config(
     page_title="Egress & Occupant Load Calculator",
@@ -369,7 +390,11 @@ def main():
     
     # Header
     st.title("🏗️ Egress & Occupant Load Calculator")
-    st.markdown("**Professional IBC-based calculations for architectural design**")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("**Professional IBC-based calculations for architectural design**")
+    with col2:
+        st.markdown(f"**Version {__version__}** | *{__build_date__}*")
     
     # Sidebar for project management and settings
     with st.sidebar:
@@ -455,16 +480,16 @@ def main():
             if st.button("📋 Show History"):
                 st.session_state.show_history = not st.session_state.show_history
         
-        # Export project
-        if st.session_state.buildings:
-            project_data = {
-                'name': st.session_state.project_name or 'Untitled Project',
-                'buildings': st.session_state.buildings,
-                'created_date': datetime.now().isoformat(),
-                'version': '2.0'
-            }
-            
-            project_json = json.dumps(project_data, indent=2)
+                # Export project
+                if st.session_state.buildings:
+                    project_data = {
+                        'name': st.session_state.project_name or 'Untitled Project',
+                        'buildings': st.session_state.buildings,
+                        'created_date': datetime.now().isoformat(),
+                        'version': __version__,
+                        'app_version': __version__,
+                        'exported_by': f"Egress Calculator v{__version__}"
+                    }            project_json = json.dumps(project_data, indent=2)
             st.download_button(
                 label="📥 Export Project",
                 data=project_json,
@@ -489,6 +514,23 @@ def main():
         
         # Advanced options toggle
         st.session_state.show_advanced = st.checkbox("🔧 Show Advanced Options", st.session_state.show_advanced)
+        
+        # Version info
+        with st.expander("ℹ️ Version Info", expanded=False):
+            st.markdown(f"**Version:** {__version__}")
+            st.markdown(f"**Build Date:** {__build_date__}")
+            
+            if __version__ in __changelog__:
+                st.markdown("**What's New:**")
+                for change in __changelog__[__version__]:
+                    st.markdown(f"• {change}")
+            
+            st.markdown("**Previous Versions:**")
+            for version, changes in __changelog__.items():
+                if version != __version__:
+                    with st.expander(f"Version {version}", expanded=False):
+                        for change in changes:
+                            st.markdown(f"• {change}")
     
     # Main content area
     if not st.session_state.buildings:
@@ -798,12 +840,32 @@ def main():
     
     # Footer
     st.divider()
-    st.markdown("""
-    **⚠️ Disclaimer:** This calculator is for preliminary design purposes only. 
-    Always consult with local authorities and verify current code requirements before finalizing any design.
+    footer_col1, footer_col2 = st.columns([2, 1])
     
-    Created with ❤️ using Streamlit | [Source Code](https://github.com/your-repo) | Version 2.0
-    """)
+    with footer_col1:
+        st.markdown("""
+        **⚠️ Disclaimer:** This calculator is for preliminary design purposes only. 
+        Always consult with local authorities and verify current code requirements before finalizing any design.
+        """)
+    
+    with footer_col2:
+        st.markdown(f"""
+        **Egress Calculator v{__version__}**  
+        Built: {__build_date__}  
+        [📚 GitHub Repository](https://github.com/hanialnaber/egress-calculator)
+        """)
+        
+        if st.button("📋 View Changelog"):
+            st.session_state.show_changelog = not st.session_state.get('show_changelog', False)
+    
+    # Changelog modal
+    if st.session_state.get('show_changelog', False):
+        with st.expander("📋 Full Changelog", expanded=True):
+            for version, changes in __changelog__.items():
+                st.markdown(f"### Version {version}")
+                for change in changes:
+                    st.markdown(f"• {change}")
+                st.markdown("---")
 
 if __name__ == "__main__":
     main()
