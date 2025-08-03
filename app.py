@@ -247,6 +247,93 @@ Units: {units.title()}
     
     return summary
 
+def generate_step_by_step_calculation(inputs: Dict, results: Dict) -> List[Dict]:
+    """Generate detailed step-by-step calculation breakdown"""
+    units = st.session_state.current_units
+    area_units = "sq. m" if units == 'metric' else "sq. ft."
+    width_units = "mm" if units == 'metric' else "inches"
+    
+    steps = []
+    
+    # Step 1: Occupant Load Factor Selection
+    area_type = AREA_TYPES[inputs['occupancy']]
+    base_factor = IBC_DATA[inputs['ibc_version']][inputs['occupancy']]
+    
+    steps.append({
+        'step': 1,
+        'title': 'Determine Occupant Load Factor',
+        'description': f"Based on {inputs['ibc_version']} IBC Table 1004.5",
+        'calculation': f"Occupancy: {inputs['occupancy']}",
+        'formula': f"Factor = {base_factor} sq. ft./occupant",
+        'result': f"{inputs['occupant_load_factor']:.2f} {area_units}/occupant",
+        'note': f"Using {area_type} area as specified by IBC for this occupancy type"
+    })
+    
+    # Step 2: Occupant Load Calculation
+    steps.append({
+        'step': 2,
+        'title': 'Calculate Occupant Load',
+        'description': "Apply IBC Section 1004.3 - occupant load calculation",
+        'calculation': f"Floor Area ÷ Occupant Load Factor",
+        'formula': f"{inputs['floor_area']:,} {area_units} ÷ {inputs['occupant_load_factor']:.2f} {area_units}/occupant",
+        'result': f"{inputs['floor_area'] / inputs['occupant_load_factor']:.2f} = {results['occupant_load']} occupants (rounded up)",
+        'note': "Always round UP to the next whole number per IBC requirements"
+    })
+    
+    # Step 3: Egress Capacity Factors
+    stair_factor = 0.2 if inputs['has_sprinklers'] else 0.3
+    other_factor = 0.15 if inputs['has_sprinklers'] else 0.2
+    sprinkler_status = "with sprinklers" if inputs['has_sprinklers'] else "without sprinklers"
+    
+    steps.append({
+        'step': 3,
+        'title': 'Determine Egress Capacity Factors',
+        'description': f"Based on IBC Section 1005.3.1 - {sprinkler_status}",
+        'calculation': f"Building has {'automatic sprinkler system' if inputs['has_sprinklers'] else 'no sprinkler system'}",
+        'formula': f"Stairs: {stair_factor} inches/occupant\nOther components: {other_factor} inches/occupant",
+        'result': f"Using {sprinkler_status} factors",
+        'note': "Sprinkler systems allow for reduced egress width requirements"
+    })
+    
+    # Step 4: Stair Width Calculation
+    steps.append({
+        'step': 4,
+        'title': 'Calculate Required Stair Width',
+        'description': "Apply IBC Section 1005.3.1 for stair capacity",
+        'calculation': f"Occupant Load × Stair Factor",
+        'formula': f"{results['occupant_load']} occupants × {stair_factor} inches/occupant",
+        'result': f"{results['occupant_load'] * stair_factor:.1f} = {results['egress_widths']['stairs']} {width_units} (rounded up)",
+        'note': "Minimum stair width is typically 44 inches per IBC Section 1011.2"
+    })
+    
+    # Step 5: Other Components Width Calculation
+    steps.append({
+        'step': 5,
+        'title': 'Calculate Required Width for Other Components',
+        'description': "Apply IBC Section 1005.3.1 for doors, corridors, etc.",
+        'calculation': f"Occupant Load × Other Components Factor",
+        'formula': f"{results['occupant_load']} occupants × {other_factor} inches/occupant",
+        'result': f"{results['occupant_load'] * other_factor:.1f} = {results['egress_widths']['other']} {width_units} (rounded up)",
+        'note': "This applies to doors, corridors, ramps, and other egress components"
+    })
+    
+    # Step 6: Door Width Calculation (if advanced)
+    if results.get('door_width') and inputs.get('exit_doors'):
+        min_door_width = 32  # IBC minimum
+        calculated_width = math.ceil(results['egress_widths']['other'] / inputs['exit_doors'])
+        
+        steps.append({
+            'step': 6,
+            'title': 'Calculate Individual Door Width',
+            'description': "Distribute total egress width among exit doors",
+            'calculation': f"Total Required Width ÷ Number of Doors",
+            'formula': f"{results['egress_widths']['other']} {width_units} ÷ {inputs['exit_doors']} doors",
+            'result': f"{calculated_width} {width_units} (minimum {min_door_width} inches per IBC 1010.1.1)",
+            'note': f"Final door width: {results['door_width']} {width_units} (takes maximum of calculated and minimum)"
+        })
+    
+    return steps
+
 def save_to_history(results: Dict):
     """Save calculation to history"""
     history_item = {
@@ -592,6 +679,61 @@ def main():
                     value=format_width(results['total_width'], st.session_state.current_units)
                 )
         
+        # Step-by-step calculation breakdown
+        with st.expander("🔍 Step-by-Step Calculation Process", expanded=False):
+            steps = generate_step_by_step_calculation(results['inputs'], results)
+            
+            for step in steps:
+                st.markdown(f"### Step {step['step']}: {step['title']}")
+                
+                # Create columns for better layout
+                step_col1, step_col2 = st.columns([3, 2])
+                
+                with step_col1:
+                    st.markdown(f"**Description:** {step['description']}")
+                    st.markdown(f"**Calculation:** {step['calculation']}")
+                    if step.get('formula'):
+                        st.code(step['formula'], language='text')
+                
+                with step_col2:
+                    st.markdown(f"**Result:** {step['result']}")
+                    if step.get('note'):
+                        st.info(f"💡 {step['note']}")
+                
+                if step['step'] < len(steps):
+                    st.divider()
+        
+        # Compliance warnings and recommendations
+        with st.expander("⚠️ Design Considerations & Recommendations", expanded=False):
+            st.warning("""
+            **Professional Review Required:** This calculator provides preliminary calculations based on IBC requirements. 
+            Always consult with licensed professionals and local authorities for final design approval.
+            """)
+            
+            recommendations = []
+            
+            # Check for common issues
+            if results['occupant_load'] > 300:
+                recommendations.append("• High occupant load buildings may require additional exits and special egress considerations")
+            
+            if not results['inputs']['has_sprinklers']:
+                recommendations.append("• Consider automatic sprinkler system installation to reduce egress width requirements")
+            
+            travel_distance = results['inputs'].get('travel_distance')
+            if travel_distance and travel_distance > 200:
+                recommendations.append("• Long travel distances may require additional exits or egress modifications")
+            
+            if results['egress_widths']['stairs'] > 72:
+                recommendations.append("• Wide egress requirements may necessitate multiple stair systems")
+            
+            if results['inputs']['occupancy'] in ['A-1', 'A-2', 'A-3']:
+                recommendations.append("• Assembly occupancies have special egress requirements - verify with local code officials")
+            
+            if recommendations:
+                st.markdown("**Design Considerations:**")
+                for rec in recommendations:
+                    st.markdown(rec)
+        
         # Code references
         st.subheader("📖 Relevant IBC Sections")
         
@@ -610,15 +752,20 @@ def main():
         st.info(generate_code_notice(results['inputs']['state']))
         
         # Calculation summary
-        with st.expander("📊 Detailed Calculation Summary"):
+        with st.expander("📊 Detailed Calculation Summary (Copy/Export)", expanded=False):
             summary = generate_calculation_summary(results['inputs'], results)
-            st.markdown(summary)
+            st.text_area(
+                "Complete Calculation Summary:",
+                value=summary,
+                height=500,
+                help="Copy this summary for your records, reports, or permit applications"
+            )
             
             # Download summary
             st.download_button(
-                label="📥 Download Summary",
+                label="📥 Download Summary as Text File",
                 data=summary,
-                file_name=f"egress_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                file_name=f"egress_summary_{st.session_state.project_name or 'project'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                 mime="text/plain"
             )
     
